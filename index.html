@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Marathon">
+<meta name="description" content="24-week marathon training tracker">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Marathon Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0f0a;
+    --surface: #111611;
+    --surface2: #182018;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #f0f4f0;
+    --muted: #7a8f7a;
+    --muted2: #4a5a4a;
+    --green: #7ec87e;
+    --green-dark: #2d5a2d;
+    --green-bright: #a8e6a8;
+    --accent: #5aaa5a;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Layout */
+  #app { display: flex; flex-direction: column; min-height: 100dvh; }
+
+  header {
+    padding: calc(var(--safe-top) + 16px) 20px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .header-top h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.4px; }
+  .header-top .week-badge {
+    font-size: 11px; font-family: 'DM Mono', monospace;
+    background: var(--green-dark); color: var(--green-bright);
+    border: 1px solid var(--accent);
+    border-radius: 20px; padding: 3px 10px;
+  }
+
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+  .stat { background: var(--surface); border-radius: 10px; padding: 8px 10px; text-align: center; }
+  .stat-val { font-size: 17px; font-weight: 600; font-family: 'DM Mono', monospace; color: var(--text); line-height: 1.2; }
+  .stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .progress-bar { height: 4px; background: var(--surface2); border-radius: 99px; overflow: hidden; margin-bottom: 14px; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.4s ease; }
+
+  .phase-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .phase-tabs::-webkit-scrollbar { display: none; }
+  .phase-tab {
+    flex-shrink: 0; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    border: 1px solid var(--border2); background: transparent; color: var(--muted);
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .phase-tab.active { background: var(--green-dark); border-color: var(--accent); color: var(--green-bright); }
+
+  /* Main content */
+  main { flex: 1; padding: 12px 16px calc(80px + var(--safe-bottom)); }
+
+  /* Week cards */
+  .week-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .week-card.expanded { border-color: var(--border2); }
+
+  .week-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 13px 14px; cursor: pointer; user-select: none;
+  }
+  .week-header:active { background: var(--surface2); }
+
+  .phase-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  .week-title { font-size: 14px; font-weight: 500; flex: 1; min-width: 0; }
+  .week-dates { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .week-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .week-miles { font-size: 12px; font-family: 'DM Mono', monospace; color: var(--muted); }
+  .week-done { font-size: 12px; color: var(--muted); }
+  .week-done.complete { color: var(--green); }
+  .chevron { font-size: 14px; color: var(--muted2); transition: transform 0.2s; display: inline-block; }
+  .week-card.expanded .chevron { transform: rotate(180deg); }
+
+  /* Day grid */
+  .day-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 7px;
+    padding: 0 12px 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .day-cell {
+    background: var(--surface2);
+    border: 1.5px solid var(--border2);
+    border-radius: 10px;
+    padding: 9px 10px;
+    cursor: pointer;
+    transition: all 0.12s;
+    min-height: 80px;
+    display: flex; flex-direction: column; gap: 5px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .day-cell:active { transform: scale(0.97); }
+  .day-cell.done {
+    background: var(--green-dark);
+    border-color: var(--accent);
+  }
+  .day-cell.rest {
+    background: transparent;
+    border-color: var(--border);
+    opacity: 0.7;
+  }
+
+  .day-label { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--muted); display: flex; justify-content: space-between; }
+  .day-check { color: var(--green-bright); }
+  .day-desc { font-size: 11px; color: var(--text); line-height: 1.4; flex: 1; }
+  .day-cell.done .day-desc { color: var(--green-bright); }
+  .day-type-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 6px; border-radius: 4px; width: fit-content;
+    font-size: 10px; font-weight: 500;
+  }
+  .type-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Progress view */
+  .progress-view { display: flex; flex-direction: column; gap: 6px; }
+  .prog-row { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 3px 0; }
+  .prog-label { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--muted); width: 52px; text-align: right; flex-shrink: 0; }
+  .prog-track { flex: 1; height: 20px; background: var(--surface); border-radius: 5px; overflow: hidden; position: relative; }
+  .prog-bar { height: 100%; border-radius: 5px; transition: width 0.3s; position: absolute; top: 0; left: 0; }
+  .prog-done { height: 100%; border-radius: 5px; transition: width 0.3s; position: absolute; top: 0; left: 0; opacity: 0.9; }
+  .prog-miles { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--muted); width: 46px; flex-shrink: 0; }
+  .prog-badge {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600;
+  }
+
+  /* Bottom nav */
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border2);
+    display: flex;
+    padding: 10px 20px calc(10px + var(--safe-bottom));
+    z-index: 100;
+  }
+  .nav-btn {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    background: none; border: none; cursor: pointer; padding: 6px;
+    color: var(--muted); font-size: 10px; font-family: 'DM Sans', sans-serif;
+    border-radius: 10px; transition: all 0.15s;
+  }
+  .nav-btn.active { color: var(--green-bright); }
+  .nav-btn svg { width: 22px; height: 22px; stroke-width: 1.8; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; padding: 14px; background: var(--surface); border-radius: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .legend-label { font-size: 11px; color: var(--muted); }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: calc(80px + var(--safe-bottom) + 12px); left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--green-dark); border: 1px solid var(--accent); color: var(--green-bright);
+    padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 500;
+    opacity: 0; transition: all 0.25s; pointer-events: none; white-space: nowrap; z-index: 200;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="header-top">
+      <h1>Marathon Tracker</h1>
+      <span class="week-badge" id="current-week-badge">Loading...</span>
+    </div>
+    <div class="stats-row" id="stats-row"></div>
+    <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
+    <div class="phase-tabs" id="phase-tabs"></div>
+  </header>
+  <main id="main-content"></main>
+  <nav>
+    <button class="nav-btn active" id="nav-plan" onclick="switchView('plan')">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Plan
+    </button>
+    <button class="nav-btn" id="nav-progress" onclick="switchView('progress')">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Progress
+    </button>
+  </nav>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────────────
+
+const PHASE_COLORS = {
+  "Ramp-Up":  { dot:"#7ec87e", bar:"#3b6d11", done:"#a8e6a8" },
+  "Training": { dot:"#378add", bar:"#185fa5", done:"#85b7eb" },
+  "Taper":    { dot:"#ef9f27", bar:"#854f0b", done:"#fac775" },
+  "Race":     { dot:"#e24b4a", bar:"#a32d2d", done:"#f09595" },
+  "Recovery": { dot:"#7f77dd", bar:"#534ab7", done:"#afa9ec" },
+};
+
+const WORKOUT_TYPES = {
+  rest:      { color:"#4a5a4a", label:"Rest / Cross-Train" },
+  easy:      { color:"#5aaa5a", label:"Easy Run" },
+  tempo:     { color:"#ef9f27", label:"Tempo / LT" },
+  intervals: { color:"#7f77dd", label:"Intervals / VO2max" },
+  long:      { color:"#378add", label:"Long Run" },
+  race:      { color:"#e24b4a", label:"Race Day" },
+  recovery:  { color:"#97c459", label:"Recovery Run" },
+  speed:     { color:"#d4537e", label:"Speed / Strides" },
+};
+
+function getType(desc) {
+  if (!desc) return "rest";
+  const d = desc.toLowerCase();
+  if (d.includes("goal marathon")) return "race";
+  if (d.includes("rest") || d.includes("cross")) return "rest";
+  if (d.includes("vo2") || d.includes("o2max") || d.includes("400m") || d.includes("600m") || d.includes("1 km at 5k")) return "intervals";
+  if (d.includes("tempo") || d.includes(" lt ") || d.includes("lt pace")) return "tempo";
+  if (d.includes("long run") || d.includes("med-long") || d.includes("marathon-pace run") || d.includes("dress rehearsal")) return "long";
+  if (d.includes("tune-up race")) return "race";
+  if (d.includes("recovery") && (d.includes("speed") || d.includes("strides") || d.includes("hill"))) return "speed";
+  if (d.includes("recovery")) return "recovery";
+  if (d.includes("gen-aerobic") || d.includes("easy")) return "easy";
+  return "easy";
+}
+
+function buildPlan() {
+  const weeks = [];
+  function addDate(base, offsetDays) {
+    const d = new Date(base); d.setDate(d.getDate() + offsetDays); return d;
+  }
+
+  // RAMP-UP weeks 1–6 starting June 1 2026
+  const ramp = [
+    { miles:12,  days:["Rest or Cross-Train","2 mi Easy","Rest or Cross-Train","3 mi Easy","Rest or Cross-Train","3 mi Easy","4 mi Easy"] },
+    { miles:15,  days:["Rest or Cross-Train","2 mi Easy","Rest or Cross-Train","3 mi Easy","3 mi Easy","3 mi Easy","4 mi Easy"] },
+    { miles:21,  days:["Rest or Cross-Train","4 mi Easy","Rest or Cross-Train","4 mi Easy","4 mi Easy","4 mi Easy","5 mi Easy"] },
+    { miles:20,  days:["Rest or Cross-Train","5 mi Easy","Rest or Cross-Train","3 mi Easy","3 mi Easy","5 mi Easy","4 mi Easy"] },
+    { miles:24,  days:["Rest or Cross-Train","5 mi Easy","Rest or Cross-Train","4 mi Easy","5 mi Easy","4 mi Easy","6 mi Easy"] },
+    { miles:40,  days:["4 mi Easy","1.5 mi Warm Up, 12×400m @ 5K-10K Pace w. 400m jog rest, 1.5 mi Cool Down (9 mi)","Rest or Cross-Train","1 mi Warm Up, 5 mi Tempo @ Goal MP, 1 mi Cool Down (7 mi)","4 mi Easy","8 mi Easy","8 mi Easy"] },
+  ];
+  const rampStart = new Date(2026,5,1);
+  ramp.forEach((w,i) => {
+    weeks.push({ phase:"Ramp-Up", label:`Week ${i+1}`, miles:`${w.miles}`, days:w.days, startDate:addDate(rampStart, i*7) });
+  });
+
+  // TRAINING + TAPER + RACE (weeks-to-goal 11→0) starting July 13 2026
+  const training = [
+    { wtg:11, miles:"33-37", days:["Rest or Cross-Train","Gen-aerobic + speed 8-9 mi with 6×10s hill sprints + 8×100m strides","Rest or Cross-Train","Gen-aerobic 8-9 mi","Rest or Cross-Train","Recovery 5-6 mi","Marathon-pace run 12-13 mi with 8 mi at marathon pace"] },
+    { wtg:10, miles:"36-40", days:["Rest or Cross-Train","Gen-aerobic 9-10 mi","Rest or Cross-Train","LT 8-9 mi with 20-25 min at LT pace","Rest or Cross-Train","Recovery 5-6 mi","Med-long run 14-15 mi"] },
+    { wtg:9,  miles:"42-47", days:["Rest or Cross-Train","Gen-aerobic + speed 8-9 mi with 6×10s hill sprints + 8×100m strides","Recovery 4-5 mi","Med-long run 11-12 mi","Rest or Cross-Train","Recovery 4-5 mi","Marathon-pace run 15-16 mi with 10 mi at marathon pace"] },
+    { wtg:8,  miles:"46-51", days:["Rest or Cross-Train","Recovery 5-6 mi","LT 10-11 mi with 25-30 min at LT pace","Med-long run 11-12 mi","Rest or Cross-Train","Recovery 4-5 mi","Long run 16-17 mi"] },
+    { wtg:7,  miles:"38-42", label:"Week 11 (Recovery)", days:["Rest or Cross-Train","Rest or Cross-Train","Gen-aerobic 10-11 mi","Rest or Cross-Train","LT 9-10 mi with 25-30 min at LT pace","Recovery 5-6 mi","Med-long run 14-15 mi"] },
+    { wtg:6,  miles:"47-52", days:["Rest or Cross-Train","Recovery 5-6 mi","VO2max 10-11 mi with 5×1 km at 5K race pace; jog 50-90% interval time","Med-long run 11-12 mi","Rest or Cross-Train","Recovery + speed 5-6 mi with 6×100m strides","Marathon-pace run 16-17 mi with 12 mi at marathon pace"] },
+    { wtg:5,  miles:"52-57", days:["Rest or Cross-Train","Recovery + speed 5-6 mi with 6×100m strides","Med-long run 12-13 mi","Rest or Cross-Train","LT 11-12 mi with 30-40 min at LT pace","Recovery 5-6 mi","Long run 19-20 mi"] },
+    { wtg:4,  miles:"47-54", days:["Rest or Cross-Train","Gen-aerobic 9-10 mi","VO2max 8-9 mi with 5×600m at 5K race pace; jog 50-90% interval time","Rest or Cross-Train","Recovery + speed 4-5 mi with 6×100m strides","8K-15K tune-up race (total 10-13 mi)","Long run 16-17 mi"] },
+    { wtg:3,  miles:"49-55", days:["Rest or Cross-Train","Recovery + speed 6-7 mi with 6×100m strides","VO2max 9-10 mi with 5×1 km at 5K race pace; jog 50-90% interval time","Rest or Cross-Train","Med-long run 11-12 mi","Recovery 4-5 mi","Long run 19-21 mi"] },
+    { wtg:2,  miles:"41-48", days:["Rest or Cross-Train","Gen-aerobic + speed 7-8 mi with 6×10s hill sprints + 10×100m strides","Recovery 5-6 mi","Rest or Cross-Train","Recovery + speed 4-5 mi with 6×100m strides","8K-10K tune-up race (total 9-12 mi)","Long run 16-17 mi"] },
+    { wtg:1,  miles:"31-35", days:["Rest or Cross-Train","Recovery + speed 6-7 mi with 8×100m strides","VO2max 8-9 mi with 5×1 km at 5K race pace; jog 50-90% interval time","Rest or Cross-Train","Recovery + speed 5-6 mi with 6×100m strides","Rest or Cross-Train","Med-long run 12-13 mi"] },
+    { wtg:0,  miles:"16-21", label:"Race Week 🎉", days:["Rest","Recovery 5-6 mi","Dress rehearsal 5-6 mi with 2 mi at marathon pace","Rest","Recovery + speed 4-5 mi with 6×100m strides","Recovery 2-4 mi","GOAL MARATHON 🏁"] },
+  ];
+  const trainStart = new Date(2026,6,13);
+  training.forEach((w,i) => {
+    const phase = w.wtg === 0 ? "Race" : (w.wtg <= 2 ? "Taper" : "Training");
+    weeks.push({ phase, label: w.label || `Week ${7+i}`, miles:w.miles, days:w.days, startDate:addDate(trainStart, i*7) });
+  });
+
+  // RECOVERY 5 weeks after marathon
+  const lastWeek = weeks[weeks.length-1];
+  const recovStart = addDate(lastWeek.startDate, 7);
+  const recov = [
+    { miles:"12-15", days:["Rest or Cross-Train","Rest or Cross-Train","Recovery 3-4 mi","Rest or Cross-Train","Recovery 4-5 mi","Rest or Cross-Train","Recovery 5-6 mi"] },
+    { miles:"19-23", days:["Rest or Cross-Train","Recovery 4-5 mi","Recovery 4-5 mi","Rest or Cross-Train","Recovery 5-6 mi","Rest or Cross-Train","Recovery 6-7 mi"] },
+    { miles:"24-28", days:["Rest or Cross-Train","Recovery 5-6 mi","Recovery 4-5 mi","Rest or Cross-Train","Gen-aerobic + speed 7-8 mi with 8×100m strides","Rest or Cross-Train","Gen-aerobic 8-9 mi"] },
+    { miles:"28-32", days:["Rest or Cross-Train","Gen-aerobic 7-8 mi","Recovery 5-6 mi","Rest or Cross-Train","Gen-aerobic + speed 7-8 mi with 8×100m strides","Rest or Cross-Train","Gen-aerobic 9-10 mi"] },
+    { miles:"33-38", days:["Rest or Cross-Train","Gen-aerobic 7-8 mi","Recovery 4-5 mi","Rest or Cross-Train","Gen-aerobic + speed 7-8 mi with 8×100m strides","Recovery 4-5 mi","Med-long run 11-12 mi"] },
+  ];
+  recov.forEach((w,i) => {
+    weeks.push({ phase:"Recovery", label:`Recovery ${i+1}`, miles:w.miles, days:w.days, startDate:addDate(recovStart, i*7) });
+  });
+
+  return weeks;
+}
+
+const plan = buildPlan();
+const DAYS_SHORT = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const PHASES = ["All","Ramp-Up","Training","Taper","Race","Recovery"];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let completed = JSON.parse(localStorage.getItem("marathon_completed") || "{}");
+let expandedWeek = null;
+let activePhase = "All";
+let activeView = "plan";
+
+function saveCompleted() {
+  localStorage.setItem("marathon_completed", JSON.stringify(completed));
+}
+
+function toggleDay(weekIdx, dayIdx) {
+  const key = `${weekIdx}-${dayIdx}`;
+  completed[key] = !completed[key];
+  saveCompleted();
+  renderAll();
+  showToast(completed[key] ? "Workout complete! 💪" : "Marked incomplete");
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function fmt(d) { return d.toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
+
+function weekDone(wi) {
+  return plan[wi].days.filter((_,di) => completed[`${wi}-${di}`]).length;
+}
+function weekRunnable(wi) {
+  return plan[wi].days.filter(d => getType(d) !== "rest").length;
+}
+function totalDone() { return Object.values(completed).filter(Boolean).length; }
+function totalRunnable() { return plan.reduce((_,__,i) => _ + weekRunnable(i), 0); }
+
+function currentWeekLabel() {
+  const today = new Date();
+  for (let i = plan.length-1; i >= 0; i--) {
+    if (today >= plan[i].startDate) return plan[i].label;
+  }
+  return plan[0].label;
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function renderStats() {
+  const done = totalDone(), total = totalRunnable();
+  const pct = Math.round(done / total * 100);
+  document.getElementById("prog-fill").style.width = pct + "%";
+  document.getElementById("current-week-badge").textContent = currentWeekLabel();
+  document.getElementById("stats-row").innerHTML = [
+    { val:"24",              label:"Weeks" },
+    { val:"Wk 18",           label:"Race week" },
+    { val:`${done}/${total}`,label:"Done" },
+    { val:`${pct}%`,         label:"Progress" },
+  ].map(s => `<div class="stat"><div class="stat-val">${s.val}</div><div class="stat-label">${s.label}</div></div>`).join("");
+}
+
+function renderPhaseTabs() {
+  document.getElementById("phase-tabs").innerHTML = PHASES.map(p =>
+    `<button class="phase-tab${activePhase===p?" active":""}" onclick="setPhase('${p}')">${p}</button>`
+  ).join("");
+}
+
+function renderPlanView() {
+  const filtered = plan.map((w,i)=>({...w,globalIdx:i})).filter(w => activePhase==="All" || w.phase===activePhase);
+  const container = document.getElementById("main-content");
+  container.innerHTML = filtered.map(w => {
+    const i = w.globalIdx;
+    const ph = PHASE_COLORS[w.phase];
+    const done = weekDone(i), total = weekRunnable(i);
+    const isExp = expandedWeek === i;
+    const endDate = new Date(w.startDate); endDate.setDate(endDate.getDate()+6);
+
+    let daysHtml = "";
+    if (isExp) {
+      daysHtml = `<div class="day-grid">${w.days.map((desc,di) => {
+        const type = getType(desc);
+        const wt = WORKOUT_TYPES[type];
+        const isDone = !!completed[`${i}-${di}`];
+        const isRest = type === "rest";
+        const date = new Date(w.startDate); date.setDate(date.getDate()+di);
+        return `<div class="day-cell${isDone?" done":""}${isRest?" rest":""}" onclick="toggleDay(${i},${di})">
+          <div class="day-label">
+            <span>${DAYS_SHORT[di]} · ${fmt(date)}</span>
+            ${isDone?'<span class="day-check">✓</span>':""}
+          </div>
+          <div class="day-desc">${desc||"Rest"}</div>
+          <div class="day-type-badge" style="background:${wt.color}22">
+            <div class="type-dot" style="background:${wt.color}"></div>
+            <span style="color:${wt.color}">${wt.label}</span>
+          </div>
+        </div>`;
+      }).join("")}</div>`;
+    }
+
+    return `<div class="week-card${isExp?" expanded":""}">
+      <div class="week-header" onclick="toggleWeek(${i})">
+        <div class="phase-dot" style="background:${ph.dot}"></div>
+        <div>
+          <div class="week-title">${w.label}</div>
+          <div class="week-dates">${fmt(w.startDate)} – ${fmt(endDate)}</div>
+        </div>
+        <div class="week-meta">
+          <span class="week-miles">${w.miles} mi</span>
+          <span class="week-done${done===total&&total>0?" complete":""}">${done}/${total}</span>
+          <span class="chevron">⌄</span>
+        </div>
+      </div>
+      ${daysHtml}
+    </div>`;
+  }).join("");
+}
+
+function renderProgressView() {
+  const maxMi = plan.reduce((a,w) => Math.max(a, parseFloat(String(w.miles).split("-")[1]||w.miles)||0), 0);
+  const html = `<div class="progress-view">
+    ${plan.map((w,i) => {
+      const ph = PHASE_COLORS[w.phase];
+      const hi = parseFloat(String(w.miles).split("-")[1]||w.miles)||0;
+      const barW = Math.round(hi/maxMi*100);
+      const done = weekDone(i), total = weekRunnable(i);
+      const doneBarW = total > 0 ? Math.round((done/total)*barW) : 0;
+      const isComplete = done === total && total > 0;
+      const shortLabel = w.label.replace("Week ","W").replace("Recovery ","R").replace(" (Recovery)","r").replace(" 🎉","").substring(0,6);
+      return `<div class="prog-row" onclick="goToWeek(${i})">
+        <div class="prog-label">${shortLabel}</div>
+        <div class="prog-track">
+          <div class="prog-bar" style="width:${barW}%;background:${ph.bar};opacity:0.5"></div>
+          <div class="prog-done" style="width:${doneBarW}%;background:${ph.dot}"></div>
+        </div>
+        <div class="prog-miles">${w.miles}</div>
+        <div class="prog-badge" style="background:${ph.bar}22;border:1.5px solid ${ph.dot};color:${ph.dot}">
+          ${isComplete?"✓":done}
+        </div>
+      </div>`;
+    }).join("")}
+  </div>
+  <div class="legend">
+    ${Object.entries(WORKOUT_TYPES).map(([,v]) => `
+      <div class="legend-item">
+        <div class="legend-dot" style="background:${v.color}"></div>
+        <span class="legend-label">${v.label}</span>
+      </div>`).join("")}
+  </div>`;
+  document.getElementById("main-content").innerHTML = html;
+}
+
+function renderAll() {
+  renderStats();
+  renderPhaseTabs();
+  if (activeView === "plan") renderPlanView();
+  else renderProgressView();
+  document.getElementById("nav-plan").classList.toggle("active", activeView==="plan");
+  document.getElementById("nav-progress").classList.toggle("active", activeView==="progress");
+}
+
+// ── ACTIONS ───────────────────────────────────────────────────────────────────
+function toggleWeek(i) {
+  expandedWeek = expandedWeek === i ? null : i;
+  renderAll();
+  if (expandedWeek !== null) {
+    setTimeout(() => {
+      const cards = document.querySelectorAll(".week-card");
+      const filtered = activePhase === "All" ? plan : plan.filter(w => w.phase === activePhase);
+      const filteredIdx = filtered.findIndex(w => {
+        const origIdx = plan.indexOf(w);
+        return origIdx === i;
+      });
+      if (cards[filteredIdx]) cards[filteredIdx].scrollIntoView({ behavior:"smooth", block:"nearest" });
+    }, 50);
+  }
+}
+
+function goToWeek(i) {
+  activeView = "plan";
+  activePhase = "All";
+  expandedWeek = i;
+  renderAll();
+  setTimeout(() => {
+    const cards = document.querySelectorAll(".week-card");
+    if (cards[i]) cards[i].scrollIntoView({ behavior:"smooth", block:"start" });
+  }, 60);
+}
+
+function setPhase(p) { activePhase = p; expandedWeek = null; renderAll(); }
+function switchView(v) { activeView = v; renderAll(); }
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+// Auto-expand current week on load
+const today = new Date();
+for (let i = plan.length-1; i >= 0; i--) {
+  if (today >= plan[i].startDate) { expandedWeek = i; break; }
+}
+
+renderAll();
+
+// Register service worker
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>
